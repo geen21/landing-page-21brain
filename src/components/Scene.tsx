@@ -17,7 +17,7 @@ export default function Scene({ scrollProgress }: SceneProps) {
         powerPreference: 'high-performance',
       }}
       style={{ background: '#fafafa' }}
-      dpr={[1, 1.5]}
+      dpr={[1, 1]}
     >
       <NeuralNetwork scrollProgress={scrollProgress} />
     </Canvas>

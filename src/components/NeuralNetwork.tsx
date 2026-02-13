@@ -7,12 +7,12 @@ import * as THREE from 'three';
 /* ─────────────────────────────────────────────
    Config — much denser network
    ───────────────────────────────────────────── */
-const LAYERS = [8, 14, 20, 16, 12, 6, 1];
+const LAYERS = [6, 10, 14, 10, 8, 4, 1];
 const LAYER_SPACING = 4.5;
-const NODE_Y_SPACING = 1.1;
-const PARTICLE_COUNT = 600;
-const DUST_COUNT = 400;
-const CURVE_SEGMENTS = 8; // segments per curved connection
+const NODE_Y_SPACING = 1.2;
+const PARTICLE_COUNT = 120;
+const DUST_COUNT = 80;
+const CURVE_SEGMENTS = 3; // segments per curved connection
 
 /* ─────────────────────────────────────────────
    Deterministic random
@@ -235,7 +235,7 @@ function buildCurvedConnections(
   for (let l = 0; l < nodes.length - 1; l++) {
     for (let i = 0; i < nodes[l].length; i++) {
       for (let j = 0; j < nodes[l + 1].length; j++) {
-        if (srand(l * 1000 + i * 100 + j + 7) > 0.35) {
+        if (srand(l * 1000 + i * 100 + j + 7) > 0.55) {
           const s = nodes[l][i];
           const e = nodes[l + 1][j];
           const layerProgress = l / (layerCount - 2);
@@ -422,7 +422,7 @@ export default function NeuralNetwork({ scrollProgress }: Props) {
   }, [data]);
 
   const nodeGeo = useMemo(() => {
-    const g = new THREE.SphereGeometry(0.18, 14, 14);
+    const g = new THREE.SphereGeometry(0.18, 8, 8);
     g.setAttribute(
       'aNodeLayer',
       new THREE.InstancedBufferAttribute(data.layerValues, 1),
@@ -434,10 +434,10 @@ export default function NeuralNetwork({ scrollProgress }: Props) {
     return g;
   }, [data]);
 
-  const particleGeo = useMemo(() => new THREE.SphereGeometry(1, 6, 6), []);
+  const particleGeo = useMemo(() => new THREE.SphereGeometry(1, 4, 4), []);
 
   const dustGeo = useMemo(() => {
-    const g = new THREE.SphereGeometry(0.06, 4, 4);
+    const g = new THREE.SphereGeometry(0.06, 3, 3);
     const dustRandAttr = new Float32Array(DUST_COUNT);
     data.dustPositions.forEach((d, i) => { dustRandAttr[i] = d.r; });
     g.setAttribute('aDustRand', new THREE.InstancedBufferAttribute(dustRandAttr, 1));
@@ -510,18 +510,22 @@ export default function NeuralNetwork({ scrollProgress }: Props) {
     particleMat.opacity = 0.2 + sp * 0.6;
 
     if (particlesRef.current) {
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const pd = data.particles[i];
-        const c = data.conns[pd.ci];
-        if (!c) continue;
-        const pt = ((t * pd.speed + pd.offset) % 1 + 1) % 1;
-        tmp.position.lerpVectors(c.start, c.end, pt);
-        const vis = sp > 0.04 ? pd.size + sp * 0.03 : 0;
-        tmp.scale.setScalar(vis);
-        tmp.updateMatrix();
-        particlesRef.current.setMatrixAt(i, tmp.matrix);
+      // Only update every 2nd frame for performance
+      const frameIdx = Math.round(t * 60);
+      if (frameIdx % 2 === 0) {
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const pd = data.particles[i];
+          const c = data.conns[pd.ci];
+          if (!c) continue;
+          const pt = ((t * pd.speed + pd.offset) % 1 + 1) % 1;
+          tmp.position.lerpVectors(c.start, c.end, pt);
+          const vis = sp > 0.04 ? pd.size + sp * 0.03 : 0;
+          tmp.scale.setScalar(vis);
+          tmp.updateMatrix();
+          particlesRef.current.setMatrixAt(i, tmp.matrix);
+        }
+        particlesRef.current.instanceMatrix.needsUpdate = true;
       }
-      particlesRef.current.instanceMatrix.needsUpdate = true;
     }
 
     // ── Output glow ──
@@ -562,7 +566,7 @@ export default function NeuralNetwork({ scrollProgress }: Props) {
           ref={glowRef}
           position={[outputPos.x, outputPos.y, outputPos.z]}
         >
-          <sphereGeometry args={[1, 16, 16]} />
+          <sphereGeometry args={[1, 8, 8]} />
           <meshBasicMaterial
             color="#002bff"
             transparent
