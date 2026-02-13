@@ -1,86 +1,157 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface Props {
   scrollProgress: number;
 }
 
 /* ─────────────────────────────────────────────
-   File-type icon SVGs (inline for zero deps)
+   Pulsing node dot — a neuron in the UI layer
    ───────────────────────────────────────────── */
-const FileIcon = ({ ext, color }: { ext: string; color: string }) => (
-  <div className="flex flex-col items-center gap-2 group">
+const Neuron = ({
+  size = 6,
+  delay = 0,
+  className = '',
+}: {
+  size?: number;
+  delay?: number;
+  className?: string;
+}) => (
+  <span
+    className={`inline-block rounded-full bg-[#002bff] ${className}`}
+    style={{
+      width: size,
+      height: size,
+      animation: `neuronBreathe 3s ease-in-out ${delay}s infinite`,
+      boxShadow: `0 0 ${size * 2}px rgba(0,43,255,0.5), 0 0 ${size * 4}px rgba(0,43,255,0.15)`,
+    }}
+  />
+);
+
+/* ─────────────────────────────────────────────
+   Fog — large soft white radial vignette behind
+   content areas. Not a card: no edges, just an
+   atmospheric dimming of the 3D scene.
+   ───────────────────────────────────────────── */
+const Fog = ({ size = 600, className = '' }: { size?: number; className?: string }) => (
+  <div
+    className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none ${className}`}
+    style={{
+      width: size,
+      height: size,
+      background: 'radial-gradient(circle, rgba(250,250,250,0.92) 0%, rgba(250,250,250,0.75) 25%, rgba(250,250,250,0.4) 50%, rgba(250,250,250,0) 70%)',
+      filter: 'blur(10px)',
+    }}
+  />
+);
+
+/* ─────────────────────────────────────────────
+   Synapse — an animated SVG line between two
+   points on the page, drawn like a neural
+   connection
+   ───────────────────────────────────────────── */
+const Synapse = ({
+  x1,
+  y1,
+  x2,
+  y2,
+  delay = 0,
+  active = 1,
+}: {
+  x1: string;
+  y1: string;
+  x2: string;
+  y2: string;
+  delay?: number;
+  active?: number;
+}) => (
+  <svg
+    className="absolute inset-0 w-full h-full pointer-events-none"
+    style={{ opacity: active * 0.35 }}
+  >
+    <line
+      x1={x1}
+      y1={y1}
+      x2={x2}
+      y2={y2}
+      stroke="#002bff"
+      strokeWidth="1"
+      strokeDasharray="4 6"
+      style={{
+        animation: `synapseFlow 2s linear ${delay}s infinite`,
+      }}
+    />
+  </svg>
+);
+
+/* ─────────────────────────────────────────────
+   File node — a single data format shown as a
+   floating neuron-style element
+   ───────────────────────────────────────────── */
+const FileNode = ({
+  ext,
+  color,
+  x,
+  y,
+  delay,
+}: {
+  ext: string;
+  color: string;
+  x: string;
+  y: string;
+  delay: number;
+}) => (
+  <div
+    className="absolute flex flex-col items-center gap-1"
+    style={{
+      left: x,
+      top: y,
+      transform: 'translate(-50%, -50%)',
+      animation: `nodeFloat 6s ease-in-out ${delay}s infinite`,
+    }}
+  >
     <div
-      className="w-16 h-20 sm:w-20 sm:h-24 border border-black/10 flex flex-col items-center justify-center p-4
-        bg-black/[0.02] group-hover:border-[#002bff]/40 group-hover:bg-[#002bff]/[0.06] transition-all duration-500"
+      className="w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center"
+      style={{
+        background: `radial-gradient(circle, rgba(250,250,250,0.85) 0%, rgba(250,250,250,0.5) 50%, transparent 70%)`,
+        border: `1.5px solid ${color}50`,
+      }}
     >
-      <svg
-        width="28"
-        height="28"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={color}
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="opacity-70 group-hover:opacity-100 transition-opacity"
+      <span
+        className="text-xs sm:text-sm font-bold tracking-wider uppercase"
+        style={{ color, textShadow: '0 0 8px rgba(255,255,255,1)' }}
       >
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" />
-      </svg>
+        {ext}
+      </span>
     </div>
-    <span
-      className="text-[10px] sm:text-xs font-light tracking-widest uppercase"
-      style={{ color }}
-    >
-      .{ext}
-    </span>
   </div>
 );
 
-const FILE_TYPES = [
-  { ext: 'pdf', color: '#ff4444' },
-  { ext: 'csv', color: '#00d95a' },
-  { ext: 'jpg', color: '#ff9900' },
-  { ext: 'mp4', color: '#aa44ff' },
-  { ext: 'xlsx', color: '#00bb77' },
-  { ext: 'docx', color: '#4488ff' },
-  { ext: 'json', color: '#ffcc00' },
-  { ext: 'sql', color: '#002bff' },
+const FILE_NODES = [
+  { ext: 'PDF', color: '#ff4444', x: '15%', y: '25%', delay: 0 },
+  { ext: 'CSV', color: '#00d95a', x: '38%', y: '15%', delay: 0.4 },
+  { ext: 'JPG', color: '#ff9900', x: '62%', y: '12%', delay: 0.8 },
+  { ext: 'MP4', color: '#aa44ff', x: '85%', y: '22%', delay: 1.2 },
+  { ext: 'XLSX', color: '#00bb77', x: '22%', y: '72%', delay: 0.3 },
+  { ext: 'DOCX', color: '#4488ff', x: '45%', y: '80%', delay: 0.7 },
+  { ext: 'JSON', color: '#ddaa00', x: '68%', y: '78%', delay: 1.1 },
+  { ext: 'SQL', color: '#002bff', x: '82%', y: '68%', delay: 0.5 },
 ];
 
 /* ─────────────────────────────────────────────
-   LLM Chat simulation
+   Chat simulation — floating bubbles, no box
    ───────────────────────────────────────────── */
 const CHAT_MESSAGES = [
-  {
-    role: 'user' as const,
-    text: 'Quel est le chiffre d\'affaires du dernier trimestre ?',
-  },
-  {
-    role: 'assistant' as const,
-    text: 'Le CA du Q4 2025 s\'élève à 2.4M CHF, en hausse de 12% par rapport au Q3.',
-  },
-  {
-    role: 'user' as const,
-    text: 'Quels produits ont le taux de retour le plus élevé ?',
-  },
-  {
-    role: 'assistant' as const,
-    text: 'Les références SKU-4821 et SKU-7733 présentent un taux de retour de 8.2%, principalement lié à un défaut d\'emballage identifié en semaine 48.',
-  },
-  {
-    role: 'user' as const,
-    text: 'Prévisions de stock pour mars 2026 ?',
-  },
-  {
-    role: 'assistant' as const,
-    text: 'Basé sur la vélocité actuelle, rupture probable sur 3 références critiques d\'ici le 15 mars. Recommandation : commande anticipée de 1200 unités.',
-  },
+  { role: 'user' as const, text: 'Quel est le chiffre d\'affaires du dernier trimestre ?' },
+  { role: 'ai' as const, text: 'Le CA du Q4 2025 s\'élève à 2.4M CHF, en hausse de 12% par rapport au Q3.' },
+  { role: 'user' as const, text: 'Quels produits ont le taux de retour le plus élevé ?' },
+  { role: 'ai' as const, text: 'SKU-4821 et SKU-7733 : taux de retour de 8.2%, lié à un défaut d\'emballage identifié semaine 48.' },
+  { role: 'user' as const, text: 'Prévisions de stock pour mars ?' },
+  { role: 'ai' as const, text: 'Rupture probable sur 3 références d\'ici le 15 mars. Commande anticipée recommandée : 1200 unités.' },
 ];
 
-function ChatSimulation({ visible }: { visible: number }) {
+function FloatingChat({ visible }: { visible: number }) {
   const [displayedMessages, setDisplayedMessages] = useState<number>(0);
   const [typingText, setTypingText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -96,24 +167,17 @@ function ChatSimulation({ visible }: { visible: number }) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       return;
     }
-
     if (displayedMessages >= CHAT_MESSAGES.length) return;
-
-    const currentMsg = CHAT_MESSAGES[displayedMessages];
-
-    if (currentMsg.role === 'user') {
-      // User messages appear instantly after a short delay
-      timeoutRef.current = setTimeout(() => {
-        setDisplayedMessages((d) => d + 1);
-      }, 800);
+    const msg = CHAT_MESSAGES[displayedMessages];
+    if (msg.role === 'user') {
+      timeoutRef.current = setTimeout(() => setDisplayedMessages((d) => d + 1), 800);
     } else {
-      // Assistant messages are "typed" char by char
       setIsTyping(true);
-      let charIdx = 0;
+      let idx = 0;
       intervalRef.current = setInterval(() => {
-        charIdx++;
-        setTypingText(currentMsg.text.slice(0, charIdx));
-        if (charIdx >= currentMsg.text.length) {
+        idx++;
+        setTypingText(msg.text.slice(0, idx));
+        if (idx >= msg.text.length) {
           if (intervalRef.current) clearInterval(intervalRef.current);
           setIsTyping(false);
           timeoutRef.current = setTimeout(() => {
@@ -123,7 +187,6 @@ function ChatSimulation({ visible }: { visible: number }) {
         }
       }, 18);
     }
-
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -133,97 +196,75 @@ function ChatSimulation({ visible }: { visible: number }) {
   const shown = CHAT_MESSAGES.slice(0, displayedMessages);
 
   return (
-    <div className="w-full max-w-md sm:max-w-lg mx-auto">
-      {/* Terminal header */}
-      <div className="flex items-center gap-2 mb-4 px-1">
-        <div className="w-2 h-2 rounded-full bg-[#002bff]/60" />
-        <span className="text-[10px] text-black/50 font-light tracking-[0.2em] uppercase">
-          21brain Terminal
-        </span>
-      </div>
-
-      <div
-        className="border border-black/[0.08] bg-black/[0.02] backdrop-blur-sm p-8 sm:p-10 space-y-4
-          max-h-[340px] sm:max-h-[380px] overflow-hidden"
-      >
-        {shown.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[85%] px-6 py-4 text-xs sm:text-sm leading-relaxed ${
-                msg.role === 'user'
-                  ? 'bg-[#002bff]/15 text-black/80 font-light'
-                  : 'bg-black/[0.06] text-black/70 font-light'
+    <div className="flex flex-col gap-3 max-w-lg w-full">
+      {shown.map((m, i) => (
+        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div className="flex items-start gap-2 max-w-[85%]">
+            {m.role === 'ai' && <Neuron size={6} delay={i * 0.3} className="mt-2 flex-shrink-0" />}
+            <p
+              className={`text-xs sm:text-sm leading-relaxed ${
+                m.role === 'user' ? 'text-black/80 font-normal' : 'text-black/70 font-light'
               }`}
+              style={{
+                textShadow: '0 0 30px rgba(250,250,250,1), 0 0 60px rgba(250,250,250,0.8)',
+              }}
             >
-              {msg.text}
-            </div>
+              {m.text}
+            </p>
+            {m.role === 'user' && <Neuron size={5} delay={i * 0.3} className="mt-2 flex-shrink-0" />}
           </div>
-        ))}
-
-        {/* Currently typing assistant message */}
-        {isTyping && typingText && (
-          <div className="flex justify-start">
-            <div className="max-w-[85%] px-6 py-4 bg-black/[0.06] text-black/70 text-xs sm:text-sm font-light leading-relaxed">
+        </div>
+      ))}
+      {isTyping && typingText && (
+        <div className="flex justify-start">
+          <div className="flex items-start gap-2 max-w-[85%]">
+            <Neuron size={6} className="mt-2 flex-shrink-0" />
+            <p
+              className="text-xs sm:text-sm text-black/70 font-light leading-relaxed"
+              style={{ textShadow: '0 0 30px rgba(250,250,250,1), 0 0 60px rgba(250,250,250,0.8)' }}
+            >
               {typingText}
               <span className="inline-block w-[2px] h-3 bg-[#002bff] ml-0.5 animate-pulse" />
-            </div>
+            </p>
           </div>
-        )}
-
-        {/* Typing indicator dots */}
-        {visible > 0.3 &&
-          displayedMessages < CHAT_MESSAGES.length &&
-          !isTyping && (
-            <div className="flex justify-start">
-              <div className="px-6 py-4 bg-black/[0.04] flex gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-black/20 animate-bounce [animation-delay:0ms]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-black/20 animate-bounce [animation-delay:150ms]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-black/20 animate-bounce [animation-delay:300ms]" />
-              </div>
-            </div>
-          )}
-      </div>
+        </div>
+      )}
+      {visible > 0.3 && displayedMessages < CHAT_MESSAGES.length && !isTyping && (
+        <div className="flex justify-start">
+          <div className="flex items-center gap-1.5 ml-4">
+            <Neuron size={3} delay={0} />
+            <Neuron size={3} delay={0.15} />
+            <Neuron size={3} delay={0.3} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────
-   Security shield SVG
+   Security items — floating with neuron markers
    ───────────────────────────────────────────── */
-const ShieldIcon = () => (
-  <svg
-    width="32"
-    height="32"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="#002bff"
-    strokeWidth="1.2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="opacity-80"
-  >
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    <path d="M9 12l2 2 4-4" />
-  </svg>
-);
+const SECURITY_ITEMS = [
+  { title: 'Hébergement Suisse', desc: 'Données traitées et stockées en Suisse, normes de protection maximales.' },
+  { title: 'Chiffrement AES-256', desc: 'Requêtes et réponses transitent via des canaux chiffrés de bout en bout.' },
+  { title: 'Isolation complète', desc: 'Aucun partage entre clients. Environnement dédié et cloisonné.' },
+];
 
 /* ─────────────────────────────────────────────
-   Main Overlay
+   Main Overlay — no cards, no containers
    ───────────────────────────────────────────── */
 export default function Overlay({ scrollProgress: sp }: Props) {
   const [flashing, setFlashing] = useState(false);
 
-  const handleCTA = () => {
+  const handleCTA = useCallback(() => {
     setFlashing(true);
     setTimeout(() => {
       window.location.href = 'https://demo.21datas.ch';
     }, 800);
-  };
+  }, []);
 
-  /* ── Visibility helpers ───────────────────── */
+  /* Visibility ranges */
   const fadeRange = (center: number, halfHold: number, fadeW: number) => {
     const fadeStart = center - halfHold - fadeW;
     const fadeEnd = center + halfHold + fadeW;
@@ -233,141 +274,158 @@ export default function Overlay({ scrollProgress: sp }: Props) {
     return (fadeEnd - sp) / fadeW;
   };
 
-  // Hero: fully visible at start, fades out
   const heroOp = sp < 0.06 ? 1 : Math.max(0, 1 - (sp - 0.06) / 0.08);
-  // Section 2 – File types: centered ~17%
   const filesOp = fadeRange(0.17, 0.05, 0.05);
-  // Section 3 – Security: centered ~33%
   const securityOp = fadeRange(0.33, 0.05, 0.05);
-  // Section 4 – LLM Chat: centered ~48%
   const chatOp = fadeRange(0.48, 0.05, 0.05);
-  // Section 5 – Charts: centered ~63%
   const chartsOp = fadeRange(0.63, 0.05, 0.05);
-  // CTA: fades in at 78% and stays visible through end
   const ctaOp = sp > 0.78 ? Math.min(1, (sp - 0.78) / 0.08) : 0;
+
+  /* Shared text shadow for readability over 3D */
+  const ts = '0 0 30px rgba(250,250,250,1), 0 0 60px rgba(250,250,250,0.8), 0 0 90px rgba(250,250,250,0.4)';
 
   return (
     <>
-      {/* Flash-to-white overlay for CTA redirect */}
-      {flashing && (
-        <div className="fixed inset-0 z-[100] bg-black animate-flash" />
-      )}
+      {flashing && <div className="fixed inset-0 z-[100] bg-[#002bff] animate-flash" />}
 
-      {/* ── Top-right nav button ──────────────── */}
+      {/* ── Nav button ──────────────────────── */}
       <div className="fixed top-6 right-6 sm:top-8 sm:right-8 z-20">
         <a
           href="https://demo.21datas.ch"
-          className="inline-flex items-center gap-2 px-8 py-4
-            text-xs sm:text-sm tracking-[0.15em] font-medium uppercase
-            text-[#002bff] border border-[#002bff]/30
-            bg-white/70 backdrop-blur-md
-            hover:bg-[#002bff] hover:text-white hover:border-[#002bff]
-            hover:shadow-[0_0_20px_rgba(0,43,255,0.3)]
+          className="inline-flex items-center gap-3 px-5 py-2.5
+            text-xs tracking-[0.2em] font-medium uppercase
+            text-[#002bff]
+            hover:text-white hover:bg-[#002bff]
             active:scale-[0.97]
             transition-all duration-300 cursor-pointer no-underline
             pointer-events-auto"
+          style={{
+            background: 'rgba(250,250,250,0.4)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(0,43,255,0.12)',
+          }}
         >
-          Tester l&apos;outil
+          <Neuron size={5} />
+          Tester
         </a>
       </div>
 
       <div className="fixed inset-0 z-10 pointer-events-none">
-        {/* ── Section 1 : Hero ─────────────────── */}
+
+        {/* ━━━━ HERO ━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <section
-          className="absolute inset-0 flex flex-col items-center justify-center text-center px-8 sm:px-12"
+          className="absolute inset-0 flex flex-col items-center justify-center text-center px-8"
           style={{ opacity: heroOp }}
         >
-          <h1 className="text-5xl sm:text-6xl md:text-8xl font-bold text-black tracking-tighter mb-8 leading-none drop-shadow-[0_1px_8px_rgba(255,255,255,0.8)]">
-            21BRAIN
-          </h1>
-          <p className="text-sm sm:text-lg md:text-xl text-black/80 font-light max-w-lg leading-relaxed">
-            Un LLM connecté à <span className="font-semibold text-black">VOS</span> données.
-          </p>
+          <div className="relative">
+            <Fog size={800} />
+            <h1
+              className="relative text-6xl sm:text-7xl md:text-9xl font-bold tracking-tighter leading-none mb-6"
+              style={{ color: '#0a0a0a', textShadow: ts }}
+            >
+              21BRAIN
+            </h1>
+            <p
+              className="relative text-base sm:text-xl text-black/70 font-light max-w-md leading-relaxed mx-auto"
+              style={{ textShadow: ts }}
+            >
+              Un LLM connecté à <span className="font-semibold text-[#002bff]">vos</span> données
+            </p>
+          </div>
 
-          {/* Scroll indicator */}
-          <div className="absolute bottom-14 flex flex-col items-center gap-2">
-            <span className="text-[10px] text-black/50 font-light tracking-[0.3em] uppercase">
-              Scroll
-            </span>
-            <div className="w-px h-12 bg-gradient-to-b from-black/50 to-transparent animate-pulse-line" />
+          {/* Scroll — just a neuron with a pulsing trail */}
+          <div className="absolute bottom-12 flex flex-col items-center gap-2">
+            <div className="w-px h-16 bg-gradient-to-b from-[#002bff]/30 to-transparent animate-pulse-line" />
+            <Neuron size={5} />
           </div>
         </section>
 
-        {/* ── Section 2 : File Types / Le modèle apprend ── */}
+        {/* ━━━━ FILES — constellation of format nodes ━━ */}
         <section
-          className="absolute inset-0 flex items-center justify-center px-8 sm:px-16 md:px-24"
+          className="absolute inset-0 flex flex-col items-center justify-center px-8"
           style={{
             opacity: filesOp,
-            transform: `translateY(${(1 - filesOp) * 30}px)`,
+            transform: `scale(${0.92 + filesOp * 0.08})`,
           }}
         >
-          <div className="max-w-2xl w-full bg-white/70 backdrop-blur-md p-12 sm:p-16 shadow-[0_0_40px_rgba(255,255,255,0.5)]">
-            <p className="text-[10px] sm:text-xs text-[#002bff] font-medium tracking-[0.3em] mb-5 uppercase text-center">
-              Ingestion Multi-Format
-            </p>
-            <h2 className="text-2xl sm:text-3xl md:text-5xl font-semibold text-black mb-10 tracking-tight leading-tight text-center">
-              LE MODÈLE APPREND<br />DE VOS DONNÉES
+          <div className="relative">
+            <Fog size={700} />
+            <h2
+              className="relative text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-center mb-4 leading-tight"
+              style={{ color: '#0a0a0a', textShadow: ts }}
+            >
+              Le modèle apprend
             </h2>
+            <p
+              className="relative text-sm sm:text-base text-black/60 font-light text-center mb-2 max-w-sm mx-auto"
+              style={{ textShadow: ts }}
+            >
+              de vos données, quel que soit le format
+            </p>
+          </div>
 
-            {/* File type grid */}
-            <div className="flex flex-wrap justify-center gap-5 sm:gap-7">
-              {FILE_TYPES.map((ft) => (
-                <FileIcon key={ft.ext} ext={ft.ext} color={ft.color} />
-              ))}
+          {/* File nodes floating in a constellation */}
+          <div className="relative w-full max-w-xl aspect-[16/9] mt-10">
+            {/* Synapses connecting file nodes to center */}
+            <Synapse x1="50%" y1="50%" x2="15%" y2="25%" delay={0} active={filesOp} />
+            <Synapse x1="50%" y1="50%" x2="38%" y2="15%" delay={0.3} active={filesOp} />
+            <Synapse x1="50%" y1="50%" x2="62%" y2="12%" delay={0.6} active={filesOp} />
+            <Synapse x1="50%" y1="50%" x2="85%" y2="22%" delay={0.9} active={filesOp} />
+            <Synapse x1="50%" y1="50%" x2="22%" y2="72%" delay={0.2} active={filesOp} />
+            <Synapse x1="50%" y1="50%" x2="45%" y2="80%" delay={0.5} active={filesOp} />
+            <Synapse x1="50%" y1="50%" x2="68%" y2="78%" delay={0.8} active={filesOp} />
+            <Synapse x1="50%" y1="50%" x2="82%" y2="68%" delay={1.1} active={filesOp} />
+
+            {/* Central hub neuron */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+              <Neuron size={12} />
             </div>
 
-            <p className="text-xs sm:text-sm text-black/60 font-light text-center mt-8 max-w-md mx-auto leading-relaxed">
-              PDF, tableurs, images, vidéos, bases SQL — tous vos formats
-              sont ingérés et vectorisés automatiquement.
-            </p>
+            {/* File format nodes */}
+            {FILE_NODES.map((f) => (
+              <FileNode key={f.ext} {...f} />
+            ))}
           </div>
         </section>
 
-        {/* ── Section 3 : Sécurité ─────────────── */}
+        {/* ━━━━ SECURITY — floating list ━━━━━━━ */}
         <section
-          className="absolute inset-0 flex items-center justify-end px-8 sm:px-16 md:px-24 pr-16 sm:pr-28 md:pr-44"
+          className="absolute inset-0 flex items-center justify-end px-8 sm:px-16 md:px-28"
           style={{
             opacity: securityOp,
-            transform: `translateX(${(1 - securityOp) * 40}px)`,
+            transform: `translateX(${(1 - securityOp) * 50}px)`,
           }}
         >
-          <div className="max-w-lg text-right bg-white/70 backdrop-blur-md p-12 sm:p-16 shadow-[0_0_40px_rgba(255,255,255,0.5)]">
-            <p className="text-[10px] sm:text-xs text-[#002bff] font-medium tracking-[0.3em] mb-5 uppercase">
-              Infrastructure Sécurisée
-            </p>
-            <h2 className="text-2xl sm:text-3xl md:text-5xl font-semibold text-black mb-8 tracking-tight leading-tight">
-              VOS DONNÉES<br />RESTENT LES VÔTRES
+          <div className="relative max-w-md">
+            <Fog size={700} className="!left-[60%]" />
+            <h2
+              className="relative text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-right mb-10 leading-tight"
+              style={{ color: '#0a0a0a', textShadow: ts }}
+            >
+              Vos données
+              <br />
+              restent les vôtres
             </h2>
 
-            <div className="space-y-5">
-              {[
-                {
-                  title: 'Hébergement Suisse',
-                  desc: 'Vos données sont traitées et stockées en Suisse, conformément aux normes de protection les plus strictes.',
-                },
-                {
-                  title: 'Chiffrement de bout en bout',
-                  desc: 'Chaque requête et chaque réponse transitent via des canaux chiffrés AES-256.',
-                },
-                {
-                  title: 'Isolation complète',
-                  desc: 'Aucun partage entre clients. Votre modèle est un environnement dédié et cloisonné.',
-                },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="flex items-start gap-4 justify-end"
-                >
+            <div className="relative space-y-8">
+              {SECURITY_ITEMS.map((item, i) => (
+                <div key={item.title} className="flex items-start gap-4 justify-end">
                   <div className="text-right">
-                    <p className="text-sm sm:text-base text-black/90 font-medium mb-1">
+                    <p
+                      className="text-sm sm:text-base text-black/90 font-semibold mb-1"
+                      style={{ textShadow: ts }}
+                    >
                       {item.title}
                     </p>
-                    <p className="text-xs sm:text-sm text-black/60 font-light leading-relaxed">
+                    <p
+                      className="text-xs sm:text-sm text-black/60 font-light leading-relaxed"
+                      style={{ textShadow: ts }}
+                    >
                       {item.desc}
                     </p>
                   </div>
-                  <div className="flex-shrink-0 mt-0.5">
-                    <ShieldIcon />
+                  <div className="flex-shrink-0 mt-1.5">
+                    <Neuron size={8} delay={i * 0.6} />
                   </div>
                 </div>
               ))}
@@ -375,120 +433,162 @@ export default function Overlay({ scrollProgress: sp }: Props) {
           </div>
         </section>
 
-        {/* ── Section 4 : LLM Chat Simulation ──── */}
+        {/* ━━━━ CHAT — floating conversation ━━━ */}
         <section
-          className="absolute inset-0 flex flex-col items-center justify-center px-8 sm:px-16 md:px-24"
+          className="absolute inset-0 flex flex-col items-center justify-center px-8 sm:px-16"
           style={{
             opacity: chatOp,
             transform: `translateY(${(1 - chatOp) * 25}px)`,
           }}
         >
-          <div className="bg-white/70 backdrop-blur-md p-12 sm:p-16 shadow-[0_0_40px_rgba(255,255,255,0.5)] w-full max-w-xl">
-            <p className="text-[10px] sm:text-xs text-[#002bff] font-medium tracking-[0.3em] mb-5 uppercase text-center">
-              Intelligence Conversationnelle
-            </p>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-black mb-10 tracking-tight leading-tight text-center">
-              INTERROGEZ VOS DONNÉES<br />EN LANGAGE NATUREL
+          <div className="relative w-full max-w-lg flex flex-col items-center">
+            <Fog size={750} />
+            <h2
+              className="relative text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-center mb-10 leading-tight"
+              style={{ color: '#0a0a0a', textShadow: ts }}
+            >
+              Interrogez en
+              <br />
+              langage naturel
             </h2>
-            <ChatSimulation visible={chatOp} />
+            <div className="relative w-full">
+              <FloatingChat visible={chatOp} />
+            </div>
           </div>
         </section>
 
-        {/* ── Section 5 : Chart / Graphiques ───── */}
+        {/* ━━━━ CHARTS — floating bar chart ━━━━ */}
         <section
-          className="absolute inset-0 flex flex-col items-center justify-center px-8 sm:px-16 md:px-24"
+          className="absolute inset-0 flex flex-col items-center justify-center px-8 sm:px-16"
           style={{
             opacity: chartsOp,
             transform: `translateY(${(1 - chartsOp) * 25}px)`,
           }}
         >
-          <div className="bg-white/70 backdrop-blur-md p-12 sm:p-16 shadow-[0_0_40px_rgba(255,255,255,0.5)] w-full max-w-xl">
-          <p className="text-[10px] sm:text-xs text-[#002bff] font-medium tracking-[0.3em] mb-5 uppercase text-center">
-            Visualisation Intelligente
-          </p>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-black mb-10 tracking-tight leading-tight text-center">
-            DES RÉPONSES VISUELLES<br />EN TEMPS RÉEL
-          </h2>
+          <div className="relative w-full max-w-md flex flex-col items-center">
+            <Fog size={700} />
+            <h2
+              className="relative text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-center mb-10 leading-tight"
+              style={{ color: '#0a0a0a', textShadow: ts }}
+            >
+              Réponses visuelles
+              <br />
+              en temps réel
+            </h2>
 
-          {/* Fake chart + response card */}
-          <div className="w-full max-w-md sm:max-w-lg mx-auto">
-            {/* Question */}
-            <div className="flex justify-end mb-4">
-              <div className="max-w-[85%] px-6 py-4 bg-[#002bff]/15 text-black/80 text-xs sm:text-sm font-light leading-relaxed">
+          {/* Floating chart — no container, bars are neural pillars */}
+          <div className="relative w-full">
+            {/* Question bubble */}
+            <div className="flex items-center gap-2 justify-end mb-6">
+              <p
+                className="text-xs sm:text-sm text-black/60 font-light"
+                style={{ textShadow: ts }}
+              >
                 Montre-moi l&apos;évolution du CA par trimestre
-              </div>
+              </p>
+              <Neuron size={5} />
             </div>
 
-            {/* Chart card */}
-            <div className="border border-black/[0.08] bg-black/[0.02] backdrop-blur-sm p-8 sm:p-10">
-              {/* Mini bar chart */}
-              <div className="flex items-end justify-between gap-3 h-32 sm:h-40 mb-4 px-2">
-                {[
-                  { label: 'Q1', value: 58, amount: '1.4M' },
-                  { label: 'Q2', value: 72, amount: '1.7M' },
-                  { label: 'Q3', value: 85, amount: '2.1M' },
-                  { label: 'Q4', value: 100, amount: '2.4M' },
-                ].map((bar) => (
-                  <div key={bar.label} className="flex-1 flex flex-col items-center gap-2">
-                    <span className="text-[10px] sm:text-xs text-black/70 font-medium">{bar.amount}</span>
-                    <div
-                      className="w-full bg-gradient-to-t from-[#002bff] to-[#002bff]/60 transition-all duration-700"
-                      style={{ height: `${bar.value}%` }}
-                    />
-                    <span className="text-[10px] sm:text-xs text-black/60 font-medium">{bar.label}</span>
+            {/* Bars */}
+            <div className="flex items-end gap-6 sm:gap-8 justify-center mb-3 px-4" style={{ height: 180 }}>
+              {[
+                { label: 'Q1', value: 58, amount: '1.4M' },
+                { label: 'Q2', value: 72, amount: '1.7M' },
+                { label: 'Q3', value: 85, amount: '2.1M' },
+                { label: 'Q4', value: 100, amount: '2.4M' },
+              ].map((bar, i) => {
+                const barH = Math.round((bar.value / 100) * 160);
+                return (
+                  <div key={bar.label} className="flex flex-col items-center gap-2" style={{ width: 56 }}>
+                    <span
+                      className="text-[10px] sm:text-xs text-black/70 font-semibold"
+                      style={{ textShadow: ts }}
+                    >
+                      {bar.amount}
+                    </span>
+                    {/* Bar — glowing neural pillar */}
+                    <div className="relative" style={{ width: 32, height: barH }}>
+                      <div
+                        className="absolute inset-0 rounded-t-sm"
+                        style={{
+                          background: 'linear-gradient(to top, #002bff, rgba(0,43,255,0.25))',
+                          boxShadow: '0 0 18px rgba(0,43,255,0.35), 0 0 40px rgba(0,43,255,0.12)',
+                        }}
+                      />
+                      {/* Node at top of bar */}
+                      <div className="absolute -top-1.5 left-1/2 -translate-x-1/2">
+                        <Neuron size={6} delay={i * 0.4} />
+                      </div>
+                    </div>
+                    <span
+                      className="text-[10px] sm:text-xs text-black/60 font-medium"
+                      style={{ textShadow: ts }}
+                    >
+                      {bar.label}
+                    </span>
                   </div>
-                ))}
-              </div>
+                );
+              })}
+            </div>
 
-              {/* AI response below chart */}
-              <div className="border-t border-black/[0.06] pt-4 mt-2">
-                <div className="flex items-start gap-3">
-                  <div className="w-5 h-5 rounded-full bg-[#002bff]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <div className="w-2 h-2 rounded-full bg-[#002bff]" />
-                  </div>
-                  <p className="text-xs sm:text-sm text-black/70 font-light leading-relaxed">
-                    Le chiffre d&apos;affaires affiche une croissance continue de <span className="text-black font-medium">+71%</span> sur l&apos;année,
-                    avec une accélération marquée au Q4 (<span className="text-black font-medium">+14.3% vs Q3</span>).
-                    La tendance suggère un objectif de <span className="text-black font-medium">2.8M CHF</span> atteignable au Q1 2026.
-                  </p>
-                </div>
-              </div>
+            {/* AI response — no box */}
+            <div className="flex items-start gap-3 mt-4">
+              <Neuron size={6} className="mt-1 flex-shrink-0" />
+              <p
+                className="text-xs sm:text-sm text-black/60 font-light leading-relaxed"
+                style={{ textShadow: ts }}
+              >
+                Croissance continue de <span className="text-[#002bff] font-medium">+71%</span> sur l&apos;année.
+                Accélération marquée au Q4 (<span className="text-[#002bff] font-medium">+14.3%</span>).
+                Objectif <span className="text-[#002bff] font-medium">2.8M CHF</span> atteignable Q1 2026.
+              </p>
             </div>
           </div>
           </div>
         </section>
 
-        {/* ── Section 6 : CTA ──────────────────── */}
+        {/* ━━━━ CTA ━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
         <section
-          className="absolute inset-0 flex flex-col items-center justify-center text-center px-8 sm:px-12"
+          className="absolute inset-0 flex flex-col items-center justify-center text-center px-8"
           style={{ opacity: ctaOp, pointerEvents: ctaOp > 0.2 ? 'auto' : 'none' }}
         >
-          <h2 className="text-xl sm:text-2xl md:text-4xl font-semibold text-black mb-12 tracking-tight leading-snug drop-shadow-[0_1px_8px_rgba(255,255,255,0.8)]">
-            PRÊT À INTERROGER<br />VOS DONNÉES ?
-          </h2>
+          <div className="relative flex flex-col items-center">
+            <Fog size={700} />
+            <h2
+              className="relative text-2xl sm:text-3xl md:text-5xl font-semibold tracking-tight mb-12 leading-snug"
+              style={{ color: '#0a0a0a', textShadow: ts }}
+            >
+            Prêt à interroger
+            <br />
+              <span className="text-[#002bff]">vos données ?</span>
+            </h2>
+
+          {/* CTA button — just text + neuron, minimal */}
           <a
             href="https://demo.21datas.ch"
-            onClick={(e) => {
-              e.preventDefault();
-              handleCTA();
-            }}
-            className="relative group inline-flex items-center justify-center
-              px-16 sm:px-24 py-7 sm:py-8
+            onClick={(e) => { e.preventDefault(); handleCTA(); }}
+            className="group inline-flex items-center gap-3
+              px-10 sm:px-14 py-5 sm:py-6
               text-sm sm:text-base tracking-[0.25em] font-semibold uppercase
               text-white bg-[#002bff]
-              shadow-[0_0_30px_rgba(0,43,255,0.3),0_0_0_1px_rgba(0,43,255,0.5)]
-              hover:shadow-[0_0_80px_rgba(0,43,255,0.6),0_0_0_2px_rgba(0,43,255,0.9)]
-              hover:scale-[1.05] hover:bg-[#0033ff]
+              hover:scale-[1.03]
               active:scale-[0.97]
-              transition-all duration-500 cursor-pointer
-              no-underline"
+              transition-all duration-500 cursor-pointer no-underline"
+            style={{
+              boxShadow: '0 0 40px rgba(0,43,255,0.35), 0 0 80px rgba(0,43,255,0.15)',
+            }}
           >
-            <span className="relative z-10">Tester l&apos;outil</span>
-            <div className="absolute inset-0 bg-[#002bff] opacity-20 group-hover:opacity-40 blur-2xl transition-opacity duration-500" />
+            Tester l&apos;outil
+            <Neuron size={6} className="group-hover:scale-150 transition-transform" />
           </a>
-          <p className="mt-8 text-[10px] sm:text-xs text-black/50 font-light tracking-wider">
-            demo.21datas.ch
-          </p>
+
+              <p
+              className="relative mt-8 text-[10px] sm:text-xs text-black/40 font-light tracking-wider"
+              style={{ textShadow: ts }}
+            >
+              demo.21datas.ch
+            </p>
+          </div>
         </section>
       </div>
     </>

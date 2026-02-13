@@ -23,9 +23,9 @@ export default function Home() {
   }, [handleScroll]);
 
   return (
-    <main className="relative" style={{ height: '600vh' }}>
+    <main className="relative" style={{ minHeight: '600svh', touchAction: 'pan-y' }}>
       {/* Fixed 3D canvas */}
-      <div className="fixed inset-0 z-0">
+      <div className="fixed inset-0 z-0 pointer-events-none">
         <Scene scrollProgress={scrollProgress} />
       </div>
 

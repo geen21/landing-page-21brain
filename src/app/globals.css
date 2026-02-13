@@ -18,6 +18,26 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+button,
+input,
+textarea,
+select,
+a,
+label,
+p,
+span,
+div,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-poppins), system-ui, sans-serif;
+}
+
 html {
   scroll-behavior: auto;
 }
@@ -54,6 +74,35 @@ body {
 }
 .animate-pulse-line {
   animation: pulse-line 2.4s ease-in-out infinite;
+}
+
+/* Neuron breathe — organic pulsing like the 3D nodes */
+@keyframes neuronBreathe {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+/* Synapse data flow — dashes flowing along connections */
+@keyframes synapseFlow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+/* File node gentle float */
+@keyframes nodeFloat {
+  0%, 100% {
+    transform: translate(-50%, -50%) translateY(0px);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-6px);
+  }
 }
 
 /* CTA flash transition */
