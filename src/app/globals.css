@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-poppins), system-ui, sans-serif;
+}
+
+:root {
+  --color-abyss: #fafafa;
+  --color-blue: #002bff;
+  --color-green: #00d95a;
+  --color-yellow: #ffe600;
+  --color-red: #ff3300;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: auto;
+}
+
+body {
+  background: var(--color-abyss);
+  color: #0a0a0a;
+  font-family: var(--font-poppins), system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-blue);
+  border-radius: 2px;
+}
+
+/* Scroll indicator pulse */
+@keyframes pulse-line {
+  0%, 100% {
+    opacity: 0.15;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scaleY(1.15);
+  }
+}
+.animate-pulse-line {
+  animation: pulse-line 2.4s ease-in-out infinite;
+}
+
+/* CTA flash transition */
+@keyframes flash-dark {
+  0%   { opacity: 0; }
+  40%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+.animate-flash {
+  animation: flash-dark 0.8s ease-in-out forwards;
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 43, 255, 0.15);
+  color: #0a0a0a;
+}
